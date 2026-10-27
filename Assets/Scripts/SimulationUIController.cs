@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 namespace Simulation
 {
@@ -33,19 +34,21 @@ namespace Simulation
     public class SimulationUIController : MonoBehaviour
     {
         [Header("UI Controls - Dropdowns")]
-        public Dropdown presetDropdown;
-        public Dropdown materialDropdown;
-        public Dropdown sizeUnitDropdown;
+        public TMP_Dropdown presetDropdown;
+        public TMP_Dropdown materialDropdown;
+        public TMP_Dropdown sizeUnitDropdown;
 
         [Header("UI Controls - Inputs & Sliders")]
         public Slider sizeSlider;
-        public InputField sizeInputField;
-        public Text sizeUnitLabel;
+        public TMP_InputField sizeInputField;
+        public TMP_Text sizeUnitLabel;
 
-        public InputField weightInputField;
-        public InputField densityInputField;
-        public InputField impactSpeedInputField;
-        public InputField impactAngleInputField;
+        public TMP_InputField weightInputField;
+        public TMP_InputField densityInputField;
+        public TMP_InputField impactSpeedInputField;
+        public Slider impactAngleSlider;
+        public TMP_InputField impactAngleInputField;
+        public Button startButton;
 
         [Header("3D Platform")]
         public Transform platformTransform;
@@ -182,6 +185,16 @@ namespace Simulation
 
             if (weightInputField != null)
                 weightInputField.onEndEdit.AddListener(OnWeightChanged);
+
+            if (impactAngleSlider != null)
+            {
+                impactAngleSlider.minValue = 5f;
+                impactAngleSlider.maxValue = 90f;
+                impactAngleSlider.onValueChanged.AddListener(OnSliderAngleChanged);
+            }
+
+            if (impactAngleInputField != null)
+                impactAngleInputField.onEndEdit.AddListener(OnInputAngleChanged);
         }
 
         private void OnPresetChanged(int index)
@@ -221,8 +234,16 @@ namespace Simulation
             if (impactSpeedInputField != null)
                 impactSpeedInputField.text = preset.impactSpeedKmS.ToString("F2");
 
+            float clampedAngle = Mathf.Clamp(preset.impactAngleDeg, 5f, 90f);
+            if (impactAngleSlider != null)
+            {
+                impactAngleSlider.minValue = 5f;
+                impactAngleSlider.maxValue = 90f;
+                impactAngleSlider.value = clampedAngle;
+            }
+
             if (impactAngleInputField != null)
-                impactAngleInputField.text = preset.impactAngleDeg.ToString("F1");
+                impactAngleInputField.text = clampedAngle.ToString("F1");
 
             isUpdatingUI = false;
 
@@ -299,6 +320,34 @@ namespace Simulation
                 }
                 isUpdatingUI = false;
                 RecalculateWeight();
+            }
+        }
+
+        private void OnSliderAngleChanged(float val)
+        {
+            if (isUpdatingUI) return;
+            isUpdatingUI = true;
+            if (impactAngleInputField != null)
+                impactAngleInputField.text = val.ToString("F1");
+            isUpdatingUI = false;
+        }
+
+        private void OnInputAngleChanged(string text)
+        {
+            if (isUpdatingUI) return;
+            if (float.TryParse(text, out float val))
+            {
+                val = Mathf.Clamp(val, 5f, 90f);
+                isUpdatingUI = true;
+                if (impactAngleSlider != null)
+                {
+                    impactAngleSlider.value = Mathf.Clamp(val, impactAngleSlider.minValue, impactAngleSlider.maxValue);
+                }
+                if (impactAngleInputField != null)
+                {
+                    impactAngleInputField.text = val.ToString("F1");
+                }
+                isUpdatingUI = false;
             }
         }
 
