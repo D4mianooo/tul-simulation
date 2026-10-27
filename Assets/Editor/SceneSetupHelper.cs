@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using TMPro;
 using Simulation;
 
 namespace Simulation.Editor
@@ -11,14 +12,24 @@ namespace Simulation.Editor
         [MenuItem("Simulation/Build SampleScene Simulation Setup")]
         public static void BuildSetup()
         {
-            // 1. Ensure 3D Plane Platform exists
-            GameObject platform = GameObject.Find("Platform");
+            // 1. Ensure 3D TerrainGenerator Platform exists
+            GameObject existingPlane = GameObject.Find("Plane");
+            if (existingPlane != null)
+            {
+                Object.DestroyImmediate(existingPlane);
+            }
+
+            TerrainGenerator existingTerrain = Object.FindFirstObjectByType<TerrainGenerator>();
+            GameObject platform = existingTerrain != null ? existingTerrain.gameObject : GameObject.Find("TerrainGenerator");
             if (platform == null)
             {
-                platform = GameObject.CreatePrimitive(PrimitiveType.Plane);
-                platform.name = "Platform";
+                platform = new GameObject("TerrainGenerator");
                 platform.transform.position = Vector3.zero;
-                platform.transform.localScale = new Vector3(10, 1, 10); // 100m x 100m plane
+                platform.transform.localScale = Vector3.one;
+            }
+            if (platform.GetComponent<TerrainGenerator>() == null)
+            {
+                platform.AddComponent<TerrainGenerator>();
             }
 
             // 2. Ensure EventSystem exists
@@ -49,11 +60,7 @@ namespace Simulation.Editor
             SimulationUIController controller = canvasObj.AddComponent<SimulationUIController>();
             controller.platformTransform = platform.transform;
 
-            Font defaultFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (defaultFont == null)
-            {
-                defaultFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            }
+            TMP_FontAsset defaultFont = TMP_Settings.defaultFontAsset;
 
             // Panel Root (Anchored top-left with responsive bounds)
             GameObject panelObj = new GameObject("ControlPanel");
@@ -114,29 +121,38 @@ namespace Simulation.Editor
             csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 
             // Helper methods for UI creation
-            Text CreateLabel(Transform parent, string text, int fontSize = 12, FontStyle style = FontStyle.Normal)
+            TextMeshProUGUI CreateLabel(Transform parent, string text, int fontSize = 12, FontStyles style = FontStyles.Normal)
             {
                 GameObject obj = new GameObject("Label_" + text);
                 obj.transform.SetParent(parent, false);
-                Text t = obj.AddComponent<Text>();
-                t.font = defaultFont;
+                TextMeshProUGUI t = obj.AddComponent<TextMeshProUGUI>();
+                if (defaultFont != null) t.font = defaultFont;
                 t.text = text;
                 t.fontSize = fontSize;
                 t.fontStyle = style;
                 t.color = new Color(0.85f, 0.88f, 0.93f, 1f);
-                t.alignment = TextAnchor.MiddleLeft;
+                t.alignment = TextAlignmentOptions.MidlineLeft;
                 LayoutElement le = obj.AddComponent<LayoutElement>();
                 le.preferredHeight = 18;
                 return t;
             }
 
-            Dropdown CreateDropdown(Transform parent, string name)
+            TMP_Dropdown CreateDropdown(Transform parent, string name)
             {
-                GameObject ddObj = new GameObject(name);
+                string prefabPath = "Assets/Prefabs/Dropdown.prefab";
+                GameObject existingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                if (existingPrefab != null && existingPrefab.GetComponent<TMP_Dropdown>() != null)
+                {
+                    GameObject inst = (GameObject)PrefabUtility.InstantiatePrefab(existingPrefab, parent);
+                    inst.name = name;
+                    return inst.GetComponent<TMP_Dropdown>();
+                }
+
+                GameObject ddObj = new GameObject("Dropdown");
                 ddObj.transform.SetParent(parent, false);
                 Image img = ddObj.AddComponent<Image>();
                 img.color = new Color(0.18f, 0.20f, 0.25f, 1f);
-                Dropdown dd = ddObj.AddComponent<Dropdown>();
+                TMP_Dropdown dd = ddObj.AddComponent<TMP_Dropdown>();
 
                 GameObject captionObj = new GameObject("Label");
                 captionObj.transform.SetParent(ddObj.transform, false);
@@ -145,10 +161,10 @@ namespace Simulation.Editor
                 capRect.anchorMax = Vector2.one;
                 capRect.offsetMin = new Vector2(10, 0);
                 capRect.offsetMax = new Vector2(-28, 0);
-                Text capText = captionObj.AddComponent<Text>();
-                capText.font = defaultFont;
+                TextMeshProUGUI capText = captionObj.AddComponent<TextMeshProUGUI>();
+                if (defaultFont != null) capText.font = defaultFont;
                 capText.fontSize = 12;
-                capText.alignment = TextAnchor.MiddleLeft;
+                capText.alignment = TextAlignmentOptions.MidlineLeft;
                 capText.color = Color.white;
                 dd.captionText = capText;
 
@@ -161,11 +177,11 @@ namespace Simulation.Editor
                 arrRect.pivot = new Vector2(1, 0.5f);
                 arrRect.anchoredPosition = new Vector2(-8, 0);
                 arrRect.sizeDelta = new Vector2(16, 16);
-                Text arrText = arrowObj.AddComponent<Text>();
-                arrText.font = defaultFont;
+                TextMeshProUGUI arrText = arrowObj.AddComponent<TextMeshProUGUI>();
+                if (defaultFont != null) arrText.font = defaultFont;
                 arrText.text = "▼";
                 arrText.fontSize = 10;
-                arrText.alignment = TextAnchor.MiddleCenter;
+                arrText.alignment = TextAlignmentOptions.Center;
                 arrText.color = new Color(0.7f, 0.7f, 0.7f, 1f);
 
                 // Template for dropdown
@@ -186,8 +202,13 @@ namespace Simulation.Editor
                 RectTransform vpRectD = viewport.AddComponent<RectTransform>();
                 vpRectD.anchorMin = Vector2.zero;
                 vpRectD.anchorMax = Vector2.one;
+                vpRectD.sizeDelta = Vector2.zero;
+                vpRectD.anchoredPosition = Vector2.zero;
+                vpRectD.offsetMin = Vector2.zero;
+                vpRectD.offsetMax = Vector2.zero;
                 viewport.AddComponent<Mask>().showMaskGraphic = false;
                 viewport.AddComponent<Image>().color = Color.white;
+                sr.viewport = vpRectD;
 
                 GameObject content = new GameObject("Content");
                 content.transform.SetParent(viewport.transform, false);
@@ -196,6 +217,7 @@ namespace Simulation.Editor
                 cRect.anchorMax = new Vector2(1, 1);
                 cRect.pivot = new Vector2(0.5f, 1f);
                 cRect.sizeDelta = new Vector2(0, 26);
+                sr.content = cRect;
 
                 GameObject item = new GameObject("Item");
                 item.transform.SetParent(content.transform, false);
@@ -212,10 +234,10 @@ namespace Simulation.Editor
                 ilRect.anchorMax = Vector2.one;
                 ilRect.offsetMin = new Vector2(10, 0);
                 ilRect.offsetMax = new Vector2(-10, 0);
-                Text ilText = itemLabel.AddComponent<Text>();
-                ilText.font = defaultFont;
+                TextMeshProUGUI ilText = itemLabel.AddComponent<TextMeshProUGUI>();
+                if (defaultFont != null) ilText.font = defaultFont;
                 ilText.fontSize = 12;
-                ilText.alignment = TextAnchor.MiddleLeft;
+                ilText.alignment = TextAlignmentOptions.MidlineLeft;
                 ilText.color = Color.white;
 
                 dd.itemText = ilText;
@@ -225,45 +247,63 @@ namespace Simulation.Editor
                 LayoutElement le = ddObj.AddComponent<LayoutElement>();
                 le.preferredHeight = 28;
 
+                if (!AssetDatabase.IsValidFolder("Assets/Prefabs"))
+                {
+                    AssetDatabase.CreateFolder("Assets", "Prefabs");
+                }
+                PrefabUtility.SaveAsPrefabAssetAndConnect(ddObj, prefabPath, InteractionMode.AutomatedAction);
+                ddObj.name = name;
+
                 return dd;
             }
 
-            InputField CreateInputField(Transform parent, string name, string defaultPlaceholder)
+            TMP_InputField CreateInputField(Transform parent, string name, string defaultPlaceholder)
             {
                 GameObject ifObj = new GameObject(name);
                 ifObj.transform.SetParent(parent, false);
                 Image img = ifObj.AddComponent<Image>();
                 img.color = new Color(0.18f, 0.20f, 0.25f, 1f);
-                InputField inf = ifObj.AddComponent<InputField>();
+                TMP_InputField inf = ifObj.AddComponent<TMP_InputField>();
+
+                GameObject textAreaObj = new GameObject("Text Area");
+                textAreaObj.transform.SetParent(ifObj.transform, false);
+                RectTransform textAreaRect = textAreaObj.AddComponent<RectTransform>();
+                textAreaRect.anchorMin = Vector2.zero;
+                textAreaRect.anchorMax = Vector2.one;
+                textAreaRect.offsetMin = new Vector2(10, 0);
+                textAreaRect.offsetMax = new Vector2(-10, 0);
+                textAreaObj.AddComponent<RectMask2D>();
+                inf.textViewport = textAreaRect;
 
                 GameObject phObj = new GameObject("Placeholder");
-                phObj.transform.SetParent(ifObj.transform, false);
+                phObj.transform.SetParent(textAreaObj.transform, false);
                 RectTransform phRect = phObj.AddComponent<RectTransform>();
                 phRect.anchorMin = Vector2.zero;
                 phRect.anchorMax = Vector2.one;
-                phRect.offsetMin = new Vector2(10, 0);
-                phRect.offsetMax = new Vector2(-10, 0);
-                Text phText = phObj.AddComponent<Text>();
-                phText.font = defaultFont;
+                phRect.offsetMin = Vector2.zero;
+                phRect.offsetMax = Vector2.zero;
+                TextMeshProUGUI phText = phObj.AddComponent<TextMeshProUGUI>();
+                if (defaultFont != null) phText.font = defaultFont;
                 phText.fontSize = 12;
-                phText.alignment = TextAnchor.MiddleLeft;
+                phText.alignment = TextAlignmentOptions.MidlineLeft;
                 phText.color = new Color(0.6f, 0.6f, 0.6f, 0.6f);
                 phText.text = defaultPlaceholder;
                 inf.placeholder = phText;
 
                 GameObject tObj = new GameObject("Text");
-                tObj.transform.SetParent(ifObj.transform, false);
+                tObj.transform.SetParent(textAreaObj.transform, false);
                 RectTransform tRect = tObj.AddComponent<RectTransform>();
                 tRect.anchorMin = Vector2.zero;
                 tRect.anchorMax = Vector2.one;
-                tRect.offsetMin = new Vector2(10, 0);
-                tRect.offsetMax = new Vector2(-10, 0);
-                Text tText = tObj.AddComponent<Text>();
-                tText.font = defaultFont;
+                tRect.offsetMin = Vector2.zero;
+                tRect.offsetMax = Vector2.zero;
+                TextMeshProUGUI tText = tObj.AddComponent<TextMeshProUGUI>();
+                if (defaultFont != null) tText.font = defaultFont;
                 tText.fontSize = 12;
-                tText.alignment = TextAnchor.MiddleLeft;
+                tText.alignment = TextAlignmentOptions.MidlineLeft;
                 tText.color = Color.white;
                 inf.textComponent = tText;
+                if (defaultFont != null) inf.fontAsset = defaultFont;
 
                 LayoutElement le = ifObj.AddComponent<LayoutElement>();
                 le.preferredHeight = 28;
@@ -274,7 +314,7 @@ namespace Simulation.Editor
             Transform container = contentObj.transform;
 
             // Title
-            CreateLabel(container, "IMPACT SIMULATION SETUP", 15, FontStyle.Bold);
+            CreateLabel(container, "IMPACT SIMULATION SETUP", 15, FontStyles.Bold);
 
             // 1. Presets Combobox
             CreateLabel(container, "Simulation Preset");
@@ -378,8 +418,61 @@ namespace Simulation.Editor
             controller.impactSpeedInputField = CreateInputField(container, "SpeedInput", "e.g. 20.0");
 
             // 7. Impact Angle (degrees)
-            CreateLabel(container, "Impact Angle (degrees: 0° - 90°)");
-            controller.impactAngleInputField = CreateInputField(container, "AngleInput", "e.g. 45.0");
+            GameObject angleRow = new GameObject("AngleRow");
+            angleRow.transform.SetParent(container, false);
+            HorizontalLayoutGroup angleHlg = angleRow.AddComponent<HorizontalLayoutGroup>();
+            angleHlg.spacing = 8;
+            angleHlg.childControlWidth = true;
+            angleHlg.childControlHeight = true;
+            angleHlg.childForceExpandWidth = false;
+            angleHlg.childForceExpandHeight = true;
+            LayoutElement angleRowLe = angleRow.AddComponent<LayoutElement>();
+            angleRowLe.preferredHeight = 28;
+
+            TextMeshProUGUI angleLabel = CreateLabel(angleRow.transform, "Impact Angle (degrees: 5° - 90°)");
+            LayoutElement angleLabelLe = angleLabel.GetComponent<LayoutElement>();
+            angleLabelLe.flexibleWidth = 1f;
+
+            controller.impactAngleInputField = CreateInputField(angleRow.transform, "AngleInput", "e.g. 45.0");
+            LayoutElement angleIfLe = controller.impactAngleInputField.GetComponent<LayoutElement>();
+            angleIfLe.preferredWidth = 80;
+
+            GameObject angleSliderObj = Object.Instantiate(sliderObj, container, false);
+            angleSliderObj.name = "AngleSlider";
+            LayoutElement angleSliderLe = angleSliderObj.GetComponent<LayoutElement>();
+            angleSliderLe.preferredHeight = 28;
+            Slider angleSlider = angleSliderObj.GetComponent<Slider>();
+            angleSlider.minValue = 5f;
+            angleSlider.maxValue = 90f;
+            controller.impactAngleSlider = angleSlider;
+
+            // 8. Start Button
+            GameObject startBtnObj = new GameObject("StartButton");
+            startBtnObj.transform.SetParent(container, false);
+            Image startBtnImg = startBtnObj.AddComponent<Image>();
+            startBtnImg.color = new Color(0.2f, 0.6f, 1f, 1f);
+            Button startBtn = startBtnObj.AddComponent<Button>();
+            startBtn.targetGraphic = startBtnImg;
+            LayoutElement startBtnLe = startBtnObj.AddComponent<LayoutElement>();
+            startBtnLe.preferredHeight = 36;
+
+            GameObject startBtnTextObj = new GameObject("Text (TMP)");
+            startBtnTextObj.transform.SetParent(startBtnObj.transform, false);
+            RectTransform startBtnTextRect = startBtnTextObj.AddComponent<RectTransform>();
+            startBtnTextRect.anchorMin = Vector2.zero;
+            startBtnTextRect.anchorMax = Vector2.one;
+            startBtnTextRect.offsetMin = Vector2.zero;
+            startBtnTextRect.offsetMax = Vector2.zero;
+            TextMeshProUGUI startBtnText = startBtnTextObj.AddComponent<TextMeshProUGUI>();
+            if (defaultFont != null) startBtnText.font = defaultFont;
+            startBtnText.text = "Start";
+            startBtnText.fontSize = 14;
+            startBtnText.fontStyle = FontStyles.Bold;
+            startBtnText.alignment = TextAlignmentOptions.Center;
+            startBtnText.color = Color.white;
+            startBtnText.raycastTarget = false;
+
+            controller.startButton = startBtn;
 
             // Save scene and mark dirty
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
