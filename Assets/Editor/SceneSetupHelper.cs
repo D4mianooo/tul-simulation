@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using TMPro;
 using Simulation;
 
@@ -32,14 +33,40 @@ namespace Simulation.Editor
                 platform.AddComponent<TerrainGenerator>();
             }
 
-            // 2. Ensure EventSystem exists
+            // 2. Ensure EventSystem exists (new Input System -> InputSystemUIInputModule,
+            //    StandaloneInputModule throws exceptions with "Input System Package (New)")
             EventSystem es = Object.FindFirstObjectByType<EventSystem>();
             if (es == null)
             {
                 GameObject esObj = new GameObject("EventSystem");
                 esObj.AddComponent<EventSystem>();
-                esObj.AddComponent<StandaloneInputModule>();
+                esObj.AddComponent<InputSystemUIInputModule>();
             }
+            else
+            {
+                StandaloneInputModule oldModule = es.GetComponent<StandaloneInputModule>();
+                if (oldModule != null)
+                {
+                    Object.DestroyImmediate(oldModule);
+                }
+                if (es.GetComponent<InputSystemUIInputModule>() == null)
+                {
+                    es.gameObject.AddComponent<InputSystemUIInputModule>();
+                }
+            }
+
+            // 2b. Simulation logic object (ImpactSimulation) - impact is triggered by the Start button
+            ImpactSimulation simulation = Object.FindFirstObjectByType<ImpactSimulation>();
+            if (simulation == null)
+            {
+                GameObject simObj = new GameObject("ImpactSimulation");
+                simulation = simObj.AddComponent<ImpactSimulation>();
+            }
+            SerializedObject simSo = new SerializedObject(simulation);
+            simSo.FindProperty("impactOnStart").boolValue = false;   // wait for the Start button
+            simSo.FindProperty("useMenuSettings").boolValue = true;
+            simSo.FindProperty("groundZeroMarker").objectReferenceValue = platform.transform;
+            simSo.ApplyModifiedPropertiesWithoutUndo();
 
             // 3. Canvas setup
             GameObject canvasObj = GameObject.Find("SimulationCanvas");
@@ -60,6 +87,13 @@ namespace Simulation.Editor
             SimulationUIController controller = canvasObj.AddComponent<SimulationUIController>();
             controller.platformTransform = platform.transform;
 
+            // Start button -> SimulationRequested -> SimulationStarter -> ImpactSimulation
+            SimulationStarter starter = canvasObj.AddComponent<SimulationStarter>();
+            SerializedObject starterSo = new SerializedObject(starter);
+            starterSo.FindProperty("ui").objectReferenceValue = controller;
+            starterSo.FindProperty("simulation").objectReferenceValue = simulation;
+            starterSo.ApplyModifiedPropertiesWithoutUndo();
+
             TMP_FontAsset defaultFont = TMP_Settings.defaultFontAsset;
 
             // Panel Root (Anchored top-left with responsive bounds)
@@ -72,7 +106,7 @@ namespace Simulation.Editor
             panelRect.pivot = new Vector2(0, 1);
             // Left margin 30, top margin 30, bottom margin 30, width 380
             panelRect.offsetMin = new Vector2(30, 30);
-            panelRect.offsetMax = new Vector2(410, -30);
+            panelRect.offsetMax = new Vector2(510, -30);
 
             Image panelBg = panelObj.AddComponent<Image>();
             panelBg.color = new Color(0.10f, 0.12f, 0.16f, 0.95f);
@@ -110,9 +144,9 @@ namespace Simulation.Editor
 
             VerticalLayoutGroup vlg = contentObj.AddComponent<VerticalLayoutGroup>();
             vlg.padding = new RectOffset(18, 18, 18, 18);
-            vlg.spacing = 8;
+            vlg.spacing = 10;
             vlg.childControlWidth = true;
-            vlg.childControlHeight = false;
+            vlg.childControlHeight = true;   // children use LayoutElement.preferredHeight
             vlg.childForceExpandWidth = true;
             vlg.childForceExpandHeight = false;
 
@@ -121,7 +155,7 @@ namespace Simulation.Editor
             csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 
             // Helper methods for UI creation
-            TextMeshProUGUI CreateLabel(Transform parent, string text, int fontSize = 12, FontStyles style = FontStyles.Normal)
+            TextMeshProUGUI CreateLabel(Transform parent, string text, int fontSize = 20, FontStyles style = FontStyles.Normal)
             {
                 GameObject obj = new GameObject("Label_" + text);
                 obj.transform.SetParent(parent, false);
@@ -133,7 +167,7 @@ namespace Simulation.Editor
                 t.color = new Color(0.85f, 0.88f, 0.93f, 1f);
                 t.alignment = TextAlignmentOptions.MidlineLeft;
                 LayoutElement le = obj.AddComponent<LayoutElement>();
-                le.preferredHeight = 18;
+                le.preferredHeight = 28;
                 return t;
             }
 
@@ -163,7 +197,7 @@ namespace Simulation.Editor
                 capRect.offsetMax = new Vector2(-28, 0);
                 TextMeshProUGUI capText = captionObj.AddComponent<TextMeshProUGUI>();
                 if (defaultFont != null) capText.font = defaultFont;
-                capText.fontSize = 12;
+                capText.fontSize = 20;
                 capText.alignment = TextAlignmentOptions.MidlineLeft;
                 capText.color = Color.white;
                 dd.captionText = capText;
@@ -176,11 +210,11 @@ namespace Simulation.Editor
                 arrRect.anchorMax = new Vector2(1, 0.5f);
                 arrRect.pivot = new Vector2(1, 0.5f);
                 arrRect.anchoredPosition = new Vector2(-8, 0);
-                arrRect.sizeDelta = new Vector2(16, 16);
+                arrRect.sizeDelta = new Vector2(24, 24);
                 TextMeshProUGUI arrText = arrowObj.AddComponent<TextMeshProUGUI>();
                 if (defaultFont != null) arrText.font = defaultFont;
-                arrText.text = "▼";
-                arrText.fontSize = 10;
+                arrText.text = "v"; // "▼" is missing in the default TMP font (renders as a square)
+                arrText.fontSize = 18;
                 arrText.alignment = TextAlignmentOptions.Center;
                 arrText.color = new Color(0.7f, 0.7f, 0.7f, 1f);
 
@@ -192,7 +226,7 @@ namespace Simulation.Editor
                 tRect.anchorMax = new Vector2(1, 0);
                 tRect.pivot = new Vector2(0.5f, 1f);
                 tRect.anchoredPosition = new Vector2(0, -2);
-                tRect.sizeDelta = new Vector2(0, 140);
+                tRect.sizeDelta = new Vector2(0, 220);
                 Image tImg = template.AddComponent<Image>();
                 tImg.color = new Color(0.14f, 0.16f, 0.20f, 1f);
                 ScrollRect sr = template.AddComponent<ScrollRect>();
@@ -216,7 +250,7 @@ namespace Simulation.Editor
                 cRect.anchorMin = new Vector2(0, 1);
                 cRect.anchorMax = new Vector2(1, 1);
                 cRect.pivot = new Vector2(0.5f, 1f);
-                cRect.sizeDelta = new Vector2(0, 26);
+                cRect.sizeDelta = new Vector2(0, 40);
                 sr.content = cRect;
 
                 GameObject item = new GameObject("Item");
@@ -224,7 +258,7 @@ namespace Simulation.Editor
                 RectTransform itemRect = item.AddComponent<RectTransform>();
                 itemRect.anchorMin = new Vector2(0, 0.5f);
                 itemRect.anchorMax = new Vector2(1, 0.5f);
-                itemRect.sizeDelta = new Vector2(0, 24);
+                itemRect.sizeDelta = new Vector2(0, 38);
                 item.AddComponent<Toggle>();
 
                 GameObject itemLabel = new GameObject("Item Label");
@@ -236,7 +270,7 @@ namespace Simulation.Editor
                 ilRect.offsetMax = new Vector2(-10, 0);
                 TextMeshProUGUI ilText = itemLabel.AddComponent<TextMeshProUGUI>();
                 if (defaultFont != null) ilText.font = defaultFont;
-                ilText.fontSize = 12;
+                ilText.fontSize = 20;
                 ilText.alignment = TextAlignmentOptions.MidlineLeft;
                 ilText.color = Color.white;
 
@@ -245,7 +279,7 @@ namespace Simulation.Editor
                 template.SetActive(false);
 
                 LayoutElement le = ddObj.AddComponent<LayoutElement>();
-                le.preferredHeight = 28;
+                le.preferredHeight = 40;
 
                 if (!AssetDatabase.IsValidFolder("Assets/Prefabs"))
                 {
@@ -284,7 +318,7 @@ namespace Simulation.Editor
                 phRect.offsetMax = Vector2.zero;
                 TextMeshProUGUI phText = phObj.AddComponent<TextMeshProUGUI>();
                 if (defaultFont != null) phText.font = defaultFont;
-                phText.fontSize = 12;
+                phText.fontSize = 20;
                 phText.alignment = TextAlignmentOptions.MidlineLeft;
                 phText.color = new Color(0.6f, 0.6f, 0.6f, 0.6f);
                 phText.text = defaultPlaceholder;
@@ -299,14 +333,14 @@ namespace Simulation.Editor
                 tRect.offsetMax = Vector2.zero;
                 TextMeshProUGUI tText = tObj.AddComponent<TextMeshProUGUI>();
                 if (defaultFont != null) tText.font = defaultFont;
-                tText.fontSize = 12;
+                tText.fontSize = 20;
                 tText.alignment = TextAlignmentOptions.MidlineLeft;
                 tText.color = Color.white;
                 inf.textComponent = tText;
                 if (defaultFont != null) inf.fontAsset = defaultFont;
 
                 LayoutElement le = ifObj.AddComponent<LayoutElement>();
-                le.preferredHeight = 28;
+                le.preferredHeight = 40;
 
                 return inf;
             }
@@ -314,7 +348,7 @@ namespace Simulation.Editor
             Transform container = contentObj.transform;
 
             // Title
-            CreateLabel(container, "IMPACT SIMULATION SETUP", 15, FontStyles.Bold);
+            CreateLabel(container, "IMPACT SIMULATION SETUP", 26, FontStyles.Bold);
 
             // 1. Presets Combobox
             CreateLabel(container, "Simulation Preset");
@@ -325,12 +359,12 @@ namespace Simulation.Editor
             controller.materialDropdown = CreateDropdown(container, "MaterialDropdown");
 
             // 3. Density InputField
-            CreateLabel(container, "Density (kg/m³)");
+            CreateLabel(container, "Density (kg/m3)");
             controller.densityInputField = CreateInputField(container, "DensityInput", "Enter density...");
 
             // 4. Size Row: Unit Dropdown + Slider + InputField
             CreateLabel(container, "Size / Diameter");
-            
+
             // Size Unit Dropdown
             controller.sizeUnitDropdown = CreateDropdown(container, "SizeUnitDropdown");
 
@@ -344,7 +378,7 @@ namespace Simulation.Editor
             hlg.childForceExpandWidth = false;
             hlg.childForceExpandHeight = true;
             LayoutElement sizeRowLe = sizeRow.AddComponent<LayoutElement>();
-            sizeRowLe.preferredHeight = 28;
+            sizeRowLe.preferredHeight = 40;
 
             // Slider
             GameObject sliderObj = new GameObject("SizeSlider");
@@ -396,7 +430,7 @@ namespace Simulation.Editor
             GameObject handle = new GameObject("Handle");
             handle.transform.SetParent(handleArea.transform, false);
             RectTransform hRect = handle.AddComponent<RectTransform>();
-            hRect.sizeDelta = new Vector2(16, 16);
+            hRect.sizeDelta = new Vector2(20, 0);
             Image hImg = handle.AddComponent<Image>();
             hImg.color = Color.white;
             slider.handleRect = hRect;
@@ -407,7 +441,13 @@ namespace Simulation.Editor
             // Size Input Field
             controller.sizeInputField = CreateInputField(sizeRow.transform, "SizeInput", "Value");
             LayoutElement ifLe = controller.sizeInputField.GetComponent<LayoutElement>();
-            ifLe.preferredWidth = 80;
+            ifLe.preferredWidth = 110;
+
+            // Unit label (m / km) - switched by the controller
+            controller.sizeUnitLabel = CreateLabel(sizeRow.transform, "m");
+            LayoutElement unitLe = controller.sizeUnitLabel.GetComponent<LayoutElement>();
+            unitLe.preferredWidth = 44;
+            unitLe.minWidth = 44;
 
             // 5. Weight InputField
             CreateLabel(container, "Calculated Weight / Mass (kg)");
@@ -416,6 +456,10 @@ namespace Simulation.Editor
             // 6. Impact Speed (km/s)
             CreateLabel(container, "Impact Speed (km/s)");
             controller.impactSpeedInputField = CreateInputField(container, "SpeedInput", "e.g. 20.0");
+
+            // Target ground (2500 sedimentary / 2750 crystalline)
+            CreateLabel(container, "Target ground");
+            controller.targetDropdown = CreateDropdown(container, "TargetDropdown");
 
             // 7. Impact Angle (degrees)
             GameObject angleRow = new GameObject("AngleRow");
@@ -427,20 +471,20 @@ namespace Simulation.Editor
             angleHlg.childForceExpandWidth = false;
             angleHlg.childForceExpandHeight = true;
             LayoutElement angleRowLe = angleRow.AddComponent<LayoutElement>();
-            angleRowLe.preferredHeight = 28;
+            angleRowLe.preferredHeight = 40;
 
-            TextMeshProUGUI angleLabel = CreateLabel(angleRow.transform, "Impact Angle (degrees: 5° - 90°)");
+            TextMeshProUGUI angleLabel = CreateLabel(angleRow.transform, "Impact Angle (5-90 deg)");
             LayoutElement angleLabelLe = angleLabel.GetComponent<LayoutElement>();
             angleLabelLe.flexibleWidth = 1f;
 
             controller.impactAngleInputField = CreateInputField(angleRow.transform, "AngleInput", "e.g. 45.0");
             LayoutElement angleIfLe = controller.impactAngleInputField.GetComponent<LayoutElement>();
-            angleIfLe.preferredWidth = 80;
+            angleIfLe.preferredWidth = 110;
 
             GameObject angleSliderObj = Object.Instantiate(sliderObj, container, false);
             angleSliderObj.name = "AngleSlider";
             LayoutElement angleSliderLe = angleSliderObj.GetComponent<LayoutElement>();
-            angleSliderLe.preferredHeight = 28;
+            angleSliderLe.preferredHeight = 32;
             Slider angleSlider = angleSliderObj.GetComponent<Slider>();
             angleSlider.minValue = 5f;
             angleSlider.maxValue = 90f;
@@ -454,7 +498,7 @@ namespace Simulation.Editor
             Button startBtn = startBtnObj.AddComponent<Button>();
             startBtn.targetGraphic = startBtnImg;
             LayoutElement startBtnLe = startBtnObj.AddComponent<LayoutElement>();
-            startBtnLe.preferredHeight = 36;
+            startBtnLe.preferredHeight = 56;
 
             GameObject startBtnTextObj = new GameObject("Text (TMP)");
             startBtnTextObj.transform.SetParent(startBtnObj.transform, false);
@@ -466,13 +510,19 @@ namespace Simulation.Editor
             TextMeshProUGUI startBtnText = startBtnTextObj.AddComponent<TextMeshProUGUI>();
             if (defaultFont != null) startBtnText.font = defaultFont;
             startBtnText.text = "Start";
-            startBtnText.fontSize = 14;
+            startBtnText.fontSize = 24;
             startBtnText.fontStyle = FontStyles.Bold;
             startBtnText.alignment = TextAlignmentOptions.Center;
             startBtnText.color = Color.white;
             startBtnText.raycastTarget = false;
 
             controller.startButton = startBtn;
+
+            // Status / error text
+            controller.statusText = CreateLabel(container, "");
+            controller.statusText.name = "StatusText";
+            controller.statusText.color = new Color(1f, 0.45f, 0.4f, 1f);
+            controller.statusText.GetComponent<LayoutElement>().preferredHeight = 52;
 
             // Save scene and mark dirty
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
