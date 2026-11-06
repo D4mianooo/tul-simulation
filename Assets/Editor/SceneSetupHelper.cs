@@ -409,15 +409,11 @@ namespace Simulation.Editor
             LayoutElement ifLe = controller.sizeInputField.GetComponent<LayoutElement>();
             ifLe.preferredWidth = 80;
 
-            // 5. Weight InputField
-            CreateLabel(container, "Calculated Weight / Mass (kg)");
-            controller.weightInputField = CreateInputField(container, "WeightInput", "Calculated mass...");
-
-            // 6. Impact Speed (km/s)
+            // 5. Impact Speed (km/s)
             CreateLabel(container, "Impact Speed (km/s)");
             controller.impactSpeedInputField = CreateInputField(container, "SpeedInput", "e.g. 20.0");
 
-            // 7. Impact Angle (degrees)
+            // 6. Impact Angle (degrees)
             GameObject angleRow = new GameObject("AngleRow");
             angleRow.transform.SetParent(container, false);
             HorizontalLayoutGroup angleHlg = angleRow.AddComponent<HorizontalLayoutGroup>();
@@ -446,7 +442,7 @@ namespace Simulation.Editor
             angleSlider.maxValue = 90f;
             controller.impactAngleSlider = angleSlider;
 
-            // 8. Start Button
+            // 7. Start Button
             GameObject startBtnObj = new GameObject("StartButton");
             startBtnObj.transform.SetParent(container, false);
             Image startBtnImg = startBtnObj.AddComponent<Image>();
@@ -473,6 +469,74 @@ namespace Simulation.Editor
             startBtnText.raycastTarget = false;
 
             controller.startButton = startBtn;
+
+            // 8. Output Panel (Anchored top-right with responsive bounds)
+            GameObject outputPanelObj = new GameObject("OutputPanel");
+            outputPanelObj.transform.SetParent(canvasObj.transform, false);
+            RectTransform outputPanelRect = outputPanelObj.AddComponent<RectTransform>();
+            outputPanelRect.anchorMin = new Vector2(1, 0);
+            outputPanelRect.anchorMax = new Vector2(1, 1);
+            outputPanelRect.pivot = new Vector2(1, 1);
+            outputPanelRect.offsetMin = new Vector2(-410, 30);
+            outputPanelRect.offsetMax = new Vector2(-30, -30);
+
+            Image outputPanelBg = outputPanelObj.AddComponent<Image>();
+            outputPanelBg.color = new Color(0.10f, 0.12f, 0.16f, 0.95f);
+
+            ScrollRect outputPanelScroll = outputPanelObj.AddComponent<ScrollRect>();
+            outputPanelScroll.horizontal = false;
+            outputPanelScroll.vertical = true;
+            outputPanelScroll.scrollSensitivity = 25f;
+
+            GameObject outputViewportObj = new GameObject("Viewport");
+            outputViewportObj.transform.SetParent(outputPanelObj.transform, false);
+            RectTransform outputVpRect = outputViewportObj.AddComponent<RectTransform>();
+            outputVpRect.anchorMin = Vector2.zero;
+            outputVpRect.anchorMax = Vector2.one;
+            outputVpRect.sizeDelta = Vector2.zero;
+            outputVpRect.pivot = new Vector2(0, 1);
+            Mask outputVpMask = outputViewportObj.AddComponent<Mask>();
+            outputVpMask.showMaskGraphic = false;
+            Image outputVpImg = outputViewportObj.AddComponent<Image>();
+            outputVpImg.color = Color.white;
+            outputPanelScroll.viewport = outputVpRect;
+
+            GameObject outputContentObj = new GameObject("Content");
+            outputContentObj.transform.SetParent(outputViewportObj.transform, false);
+            RectTransform outputContentRect = outputContentObj.AddComponent<RectTransform>();
+            outputContentRect.anchorMin = new Vector2(0, 1);
+            outputContentRect.anchorMax = new Vector2(1, 1);
+            outputContentRect.pivot = new Vector2(0, 1);
+            outputContentRect.anchoredPosition = Vector2.zero;
+            outputContentRect.sizeDelta = new Vector2(0, 0);
+            outputPanelScroll.content = outputContentRect;
+
+            VerticalLayoutGroup outputVlg = outputContentObj.AddComponent<VerticalLayoutGroup>();
+            outputVlg.padding = new RectOffset(18, 18, 18, 18);
+            outputVlg.spacing = 8;
+            outputVlg.childControlWidth = true;
+            outputVlg.childControlHeight = false;
+            outputVlg.childForceExpandWidth = true;
+            outputVlg.childForceExpandHeight = false;
+
+            ContentSizeFitter outputCsf = outputContentObj.AddComponent<ContentSizeFitter>();
+            outputCsf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            outputCsf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            Transform outputContainer = outputContentObj.transform;
+
+            CreateLabel(outputContainer, "SIMULATION OUTPUT", 15, FontStyles.Bold);
+
+            CreateLabel(outputContainer, "Calculated Weight / Mass (kg)");
+            controller.weightInputField = CreateInputField(outputContainer, "WeightInput", "Calculated mass...");
+
+            CreateLabel(outputContainer, "Energy (Joules)");
+            controller.energyJoulesInputField = CreateInputField(outputContainer, "EnergyJoulesInput", "Calculated energy (J)...");
+            controller.energyJoulesInputField.readOnly = true;
+
+            CreateLabel(outputContainer, "Energy (kt TNT)");
+            controller.energyKtTntInputField = CreateInputField(outputContainer, "EnergyKtTntInput", "Calculated energy (kt TNT)...");
+            controller.energyKtTntInputField.readOnly = true;
 
             // Save scene and mark dirty
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());

@@ -44,6 +44,8 @@ namespace Simulation
         public TMP_Text sizeUnitLabel;
 
         public TMP_InputField weightInputField;
+        public TMP_InputField energyJoulesInputField;
+        public TMP_InputField energyKtTntInputField;
         public TMP_InputField densityInputField;
         public TMP_InputField impactSpeedInputField;
         public Slider impactAngleSlider;
@@ -186,6 +188,9 @@ namespace Simulation
             if (weightInputField != null)
                 weightInputField.onEndEdit.AddListener(OnWeightChanged);
 
+            if (impactSpeedInputField != null)
+                impactSpeedInputField.onEndEdit.AddListener(OnImpactSpeedChanged);
+
             if (impactAngleSlider != null)
             {
                 impactAngleSlider.minValue = 5f;
@@ -195,6 +200,9 @@ namespace Simulation
 
             if (impactAngleInputField != null)
                 impactAngleInputField.onEndEdit.AddListener(OnInputAngleChanged);
+
+            if (startButton != null)
+                startButton.onClick.AddListener(RecalculateWeight);
         }
 
         private void OnPresetChanged(int index)
@@ -364,6 +372,12 @@ namespace Simulation
             RecalculateWeight();
         }
 
+        private void OnImpactSpeedChanged(string text)
+        {
+            if (isUpdatingUI) return;
+            RecalculateWeight();
+        }
+
         private void OnWeightChanged(string text)
         {
             if (isUpdatingUI) return;
@@ -374,7 +388,7 @@ namespace Simulation
                 if (diameterMeters > 0)
                 {
                     float radius = diameterMeters * 0.5f;
-                    float volume = (4f / 3f) * Mathf.PI * Mathf.Pow(radius, 3);
+                    float volume = (Mathf.PI / 6f) * Mathf.Pow(radius, 3f);
                     float newDensity = weightKg / volume;
 
                     isUpdatingUI = true;
@@ -385,6 +399,7 @@ namespace Simulation
                     isUpdatingUI = false;
                 }
             }
+            RecalculateWeight();
         }
 
         private float GetDiameterInMeters()
@@ -407,6 +422,24 @@ namespace Simulation
             return val;
         }
 
+        private double GetImpactSpeedInMetersPerSecond()
+        {
+            if (impactSpeedInputField != null && double.TryParse(impactSpeedInputField.text, out double speedKmS))
+            {
+                return speedKmS * 1000.0;
+            }
+            return 0.0;
+        }
+
+        private static string FormatOutputValue(double value)
+        {
+            if (value == 0.0)
+                return "0.0";
+            if (Math.Abs(value) >= 1e9 || Math.Abs(value) <= 1e-3)
+                return value.ToString("E3");
+            return value.ToString("N2");
+        }
+
         private void RecalculateWeight()
         {
             float diameterMeters = GetDiameterInMeters();
@@ -417,19 +450,26 @@ namespace Simulation
             }
 
             float radius = diameterMeters * 0.5f;
-            float volume = (4f / 3f) * Mathf.PI * Mathf.Pow(radius, 3);
-            double massKg = (double)volume * density;
+            double volume = (Math.PI / 6.0) * Math.Pow(radius, 3.0);
+            double massKg = volume * density;
+            double velocityMetersPerSecond = GetImpactSpeedInMetersPerSecond();
+            double energyJoules = 0.5 * massKg * velocityMetersPerSecond * velocityMetersPerSecond;
+            double energyKtTnt = energyJoules / (4.184 * 1e12);
 
+            isUpdatingUI = true;
             if (weightInputField != null)
             {
-                isUpdatingUI = true;
-                // Format mass appropriately (scientific notation if very large)
-                if (massKg >= 1e9 || massKg <= 1e-3)
-                    weightInputField.text = massKg.ToString("E3");
-                else
-                    weightInputField.text = massKg.ToString("N1");
-                isUpdatingUI = false;
+                weightInputField.text = FormatOutputValue(massKg);
             }
+            if (energyJoulesInputField != null)
+            {
+                energyJoulesInputField.text = FormatOutputValue(energyJoules);
+            }
+            if (energyKtTntInputField != null)
+            {
+                energyKtTntInputField.text = FormatOutputValue(energyKtTnt);
+            }
+            isUpdatingUI = false;
         }
     }
 }
