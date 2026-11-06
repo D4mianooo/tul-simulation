@@ -47,6 +47,8 @@ namespace Simulation
         public TMP_Text sizeUnitLabel;
 
         public TMP_InputField weightInputField;
+        public TMP_InputField energyJoulesInputField;
+        public TMP_InputField energyKtTntInputField;
         public TMP_InputField densityInputField;
         public TMP_InputField impactSpeedInputField;
         public Slider impactAngleSlider;
