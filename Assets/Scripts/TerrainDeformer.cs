@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Simulation
 {
@@ -6,6 +7,8 @@ namespace Simulation
     public class TerrainDeformer : MonoBehaviour
     {
         [SerializeField] private TerrainGenerator terrainGenerator;
+        [SerializeField] private Target target;
+        [SerializeField] private Button startButton;
         [SerializeField] private float radius = 10f;
         [SerializeField] private float depth = 5f;
         [SerializeField] private int circleSegments = 64;
@@ -13,7 +16,7 @@ namespace Simulation
         [SerializeField] private Color radiusColor = Color.red;
 
         private LineRenderer lineRenderer;
-        private bool isSubscribed;
+        private bool isButtonSubscribed;
 
         private void Awake()
         {
@@ -22,31 +25,77 @@ namespace Simulation
                 terrainGenerator = GetComponent<TerrainGenerator>();
             }
 
+            if (target == null)
+            {
+                target = FindFirstObjectByType<Target>(FindObjectsInactive.Include);
+            }
+
+            if (startButton == null)
+            {
+                SimulationUIController uiController = FindFirstObjectByType<SimulationUIController>();
+                if (uiController != null)
+                {
+                    startButton = uiController.startButton;
+                }
+            }
+
             SetupLineRenderer();
         }
 
         private void OnEnable()
         {
-            TrySubscribe();
+            TrySubscribeButton();
         }
 
         private void Start()
         {
-            TrySubscribe();
+            TrySubscribeButton();
         }
 
         private void Update()
         {
-            TrySubscribe();
+            TrySubscribeButton();
             UpdateRadiusIndicator();
         }
 
         private void OnDisable()
         {
-            if (isSubscribed && Mouse3D.Instance != null)
+            if (isButtonSubscribed && startButton != null)
             {
-                Mouse3D.Instance.OnLeftMouseClicked -= HandleLeftMouseClicked;
-                isSubscribed = false;
+                startButton.onClick.RemoveListener(DeformAtTarget);
+                isButtonSubscribed = false;
+            }
+        }
+
+        private void TrySubscribeButton()
+        {
+            if (!isButtonSubscribed && startButton != null)
+            {
+                startButton.onClick.AddListener(DeformAtTarget);
+                isButtonSubscribed = true;
+            }
+        }
+
+        public void DeformAtTarget()
+        {
+            if (target == null)
+            {
+                target = FindFirstObjectByType<Target>(FindObjectsInactive.Include);
+            }
+
+            if (target != null)
+            {
+                if (!target.gameObject.activeInHierarchy)
+                {
+                    return;
+                }
+                DeformTerrain(target.transform.position);
+                return;
+            }
+
+            if (Mouse3D.Instance != null)
+            {
+                DeformTerrain(Mouse3D.Instance.MousePosition);
             }
         }
 
@@ -106,20 +155,6 @@ namespace Simulation
                 float z = center.z + Mathf.Sin(angle) * radius;
                 lineRenderer.SetPosition(i, new Vector3(x, center.y + 0.05f, z));
             }
-        }
-
-        private void TrySubscribe()
-        {
-            if (!isSubscribed && Mouse3D.Instance != null)
-            {
-                Mouse3D.Instance.OnLeftMouseClicked += HandleLeftMouseClicked;
-                isSubscribed = true;
-            }
-        }
-
-        private void HandleLeftMouseClicked(Vector3 mouseWorldPosition)
-        {
-            DeformTerrain(mouseWorldPosition);
         }
 
         public void DeformTerrain(Vector3 worldPosition)
