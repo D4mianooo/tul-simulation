@@ -1,16 +1,38 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
-public class MenuSceneLoader : MonoBehaviour
+namespace Simulation
 {
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    public class MenuSceneLoader : MonoBehaviour
     {
-        
-    }
+        [SerializeField] private SimulationUIController ui;
+        [SerializeField] private string simulationSceneName = "Simulation";
 
-    // Update is called once per frame
-    void Update()
-    {
-        
+        private void Awake()
+        {
+            if (ui == null) ui = GetComponent<SimulationUIController>();
+        }
+
+        private void OnEnable()
+        {
+            if (ui != null) ui.SimulationRequested += HandleSimulationRequested;
+        }
+
+        private void OnDisable()
+        {
+            if (ui != null) ui.SimulationRequested -= HandleSimulationRequested;
+        }
+
+        private void HandleSimulationRequested(ImpactParameters parameters)
+        {
+            if (!Application.CanStreamedLevelBeLoaded(simulationSceneName))
+            {
+                Debug.LogError($"Scene '{simulationSceneName}' is not in the build scene list " +
+                               "(File > Build Profiles > Scene List).");
+                return;
+            }
+
+            SceneManager.LoadScene(simulationSceneName);
+        }
     }
 }
