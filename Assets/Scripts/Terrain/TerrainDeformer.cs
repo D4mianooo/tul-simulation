@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Simulation
 {
@@ -7,16 +6,14 @@ namespace Simulation
     public class TerrainDeformer : MonoBehaviour
     {
         [SerializeField] private TerrainGenerator terrainGenerator;
+        [SerializeField] private ImpactSimulation impactSimulation;
         [SerializeField] private Target target;
-        [SerializeField] private Button startButton;
-        [SerializeField] private float radius = 10f;
-        [SerializeField] private float depth = 5f;
         [SerializeField] private int circleSegments = 64;
         [SerializeField] private float lineWidth = 0.2f;
         [SerializeField] private Color radiusColor = Color.red;
 
         private LineRenderer lineRenderer;
-        private bool isButtonSubscribed;
+        private bool isSimulationSubscribed;
 
         private void Awake()
         {
@@ -25,18 +22,14 @@ namespace Simulation
                 terrainGenerator = GetComponent<TerrainGenerator>();
             }
 
+            if (impactSimulation == null)
+            {
+                impactSimulation = FindFirstObjectByType<ImpactSimulation>();
+            }
+
             if (target == null)
             {
                 target = FindFirstObjectByType<Target>(FindObjectsInactive.Include);
-            }
-
-            if (startButton == null)
-            {
-                SimulationUIController uiController = FindFirstObjectByType<SimulationUIController>();
-                if (uiController != null)
-                {
-                    startButton = uiController.startButton;
-                }
             }
 
             SetupLineRenderer();
@@ -44,39 +37,51 @@ namespace Simulation
 
         private void OnEnable()
         {
-            TrySubscribeButton();
+            TrySubscribeSimulation();
         }
 
         private void Start()
         {
-            TrySubscribeButton();
+            TrySubscribeSimulation();
         }
 
         private void Update()
         {
-            TrySubscribeButton();
+            TrySubscribeSimulation();
             UpdateRadiusIndicator();
         }
 
         private void OnDisable()
         {
-            if (isButtonSubscribed && startButton != null)
+            if (isSimulationSubscribed && impactSimulation != null)
             {
-                startButton.onClick.RemoveListener(DeformAtTarget);
-                isButtonSubscribed = false;
+                impactSimulation.ResultsComputed -= HandleResultsComputed;
+                isSimulationSubscribed = false;
             }
         }
 
-        private void TrySubscribeButton()
+        private void TrySubscribeSimulation()
         {
-            if (!isButtonSubscribed && startButton != null)
+            if (!isSimulationSubscribed && impactSimulation != null)
             {
-                startButton.onClick.AddListener(DeformAtTarget);
-                isButtonSubscribed = true;
+                impactSimulation.ResultsComputed += HandleResultsComputed;
+                isSimulationSubscribed = true;
             }
+        }
+
+        private void HandleResultsComputed(ImpactResults results)
+        {
+            DeformAtTarget((float)results.CraterRimRadiusM, (float)results.finalDepthM);
         }
 
         public void DeformAtTarget()
+        {
+            float craterRadius = impactSimulation != null ? (float)impactSimulation.Results.CraterRimRadiusM : 0f;
+            float craterDepth = impactSimulation != null ? (float)impactSimulation.Results.finalDepthM : 0f;
+            DeformAtTarget(craterRadius, craterDepth);
+        }
+
+        public void DeformAtTarget(float craterRadius, float craterDepth)
         {
             if (target == null)
             {
@@ -89,13 +94,13 @@ namespace Simulation
                 {
                     return;
                 }
-                DeformTerrain(target.transform.position);
+                DeformTerrain(target.transform.position, craterRadius, craterDepth);
                 return;
             }
 
             if (Mouse3D.Instance != null)
             {
-                DeformTerrain(Mouse3D.Instance.MousePosition);
+                DeformTerrain(Mouse3D.Instance.MousePosition, craterRadius, craterDepth);
             }
         }
 
@@ -145,19 +150,20 @@ namespace Simulation
             lineRenderer.startColor = radiusColor;
             lineRenderer.endColor = radiusColor;
 
+            float currentRadius = impactSimulation != null ? (float)impactSimulation.Results.CraterRimRadiusM : 0f;
             Vector3 center = Mouse3D.Instance != null ? Mouse3D.Instance.MousePosition : transform.position;
             float angleStep = 2f * Mathf.PI / segments;
 
             for (int i = 0; i < segments; i++)
             {
                 float angle = i * angleStep;
-                float x = center.x + Mathf.Cos(angle) * radius;
-                float z = center.z + Mathf.Sin(angle) * radius;
+                float x = center.x + Mathf.Cos(angle) * currentRadius;
+                float z = center.z + Mathf.Sin(angle) * currentRadius;
                 lineRenderer.SetPosition(i, new Vector3(x, center.y + 0.05f, z));
             }
         }
 
-        public void DeformTerrain(Vector3 worldPosition)
+        public void DeformTerrain(Vector3 worldPosition, float craterRadius, float craterDepth)
         {
             if (terrainGenerator == null)
             {
@@ -182,7 +188,7 @@ namespace Simulation
             Transform terrainTransform = terrainGenerator.transform;
             Vector3 localCenter = terrainTransform.InverseTransformPoint(worldPosition);
             Vector2 centerXZ = new Vector2(localCenter.x, localCenter.z);
-            float radiusSq = radius * radius;
+            float radiusSq = craterRadius * craterRadius;
 
             Vector3[] vertices = mesh.vertices;
             bool modified = false;
@@ -192,7 +198,7 @@ namespace Simulation
                 Vector2 vertexXZ = new Vector2(vertices[i].x, vertices[i].z);
                 if ((vertexXZ - centerXZ).sqrMagnitude <= radiusSq)
                 {
-                    vertices[i].y -= depth;
+                    vertices[i].y -= craterDepth;
                     modified = true;
                 }
             }
