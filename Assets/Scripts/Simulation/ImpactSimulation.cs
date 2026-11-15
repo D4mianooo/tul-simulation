@@ -37,7 +37,9 @@ namespace Simulation
         public double TimeSinceImpact { get; private set; }
         public Vector3 GroundZero { get; private set; }
         public float MetersPerUnit => metersPerUnit;
-        public bool LogEnabled => logReport;
+        public bool LogEnabled { get => logReport; set => logReport = value; }
+        /// Mnoznik czasu symulacji (1 = czas rzeczywisty). Ustawiany przyciskami w ImpactHUD.
+        public float TimeScale { get => timeScale; set => timeScale = Mathf.Max(0f, value); }
 
         public event Action<ImpactResults> ResultsComputed;
         public event Action<Vector3, ImpactResults> Impacted;
