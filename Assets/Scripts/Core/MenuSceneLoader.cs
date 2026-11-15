@@ -6,7 +6,7 @@ namespace Simulation
     public class MenuSceneLoader : MonoBehaviour
     {
         [SerializeField] private SimulationUIController ui;
-        [SerializeField] private string simulationSceneName = "Simulation";
+        [SerializeField] private string simulationSceneName = "SimulationScene";
 
         private void Awake()
         {

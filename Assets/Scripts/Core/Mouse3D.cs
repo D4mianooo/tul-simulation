@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
 namespace Simulation
@@ -45,7 +46,8 @@ namespace Simulation
                 MousePosition = raycastHit.point;
                 transform.position = raycastHit.point;
 
-                if (Mouse.current.leftButton.wasPressedThisFrame)
+                if (Mouse.current.leftButton.wasPressedThisFrame &&
+                    (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject()))
                 {
                     OnLeftMouseClicked?.Invoke(MousePosition);
                 }

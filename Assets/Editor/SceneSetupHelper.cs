@@ -449,11 +449,7 @@ namespace Simulation.Editor
             unitLe.preferredWidth = 44;
             unitLe.minWidth = 44;
 
-            // 5. Weight InputField
-            CreateLabel(container, "Calculated Weight / Mass (kg)");
-            controller.weightInputField = CreateInputField(container, "WeightInput", "Calculated mass...");
-
-            // 6. Impact Speed (km/s)
+            // 5. Impact Speed (km/s)
             CreateLabel(container, "Impact Speed (km/s)");
             controller.impactSpeedInputField = CreateInputField(container, "SpeedInput", "e.g. 20.0");
 
@@ -490,7 +486,7 @@ namespace Simulation.Editor
             angleSlider.maxValue = 90f;
             controller.impactAngleSlider = angleSlider;
 
-            // 8. Start Button
+            // 7. Start Button
             GameObject startBtnObj = new GameObject("StartButton");
             startBtnObj.transform.SetParent(container, false);
             Image startBtnImg = startBtnObj.AddComponent<Image>();

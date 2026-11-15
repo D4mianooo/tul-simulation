@@ -6,14 +6,14 @@ namespace Simulation
     public class TerrainDeformer : MonoBehaviour
     {
         [SerializeField] private TerrainGenerator terrainGenerator;
-        [SerializeField] private float radius = 10f;
-        [SerializeField] private float depth = 5f;
+        [SerializeField] private ImpactSimulation impactSimulation;
+        [SerializeField] private Target target;
         [SerializeField] private int circleSegments = 64;
         [SerializeField] private float lineWidth = 0.2f;
         [SerializeField] private Color radiusColor = Color.red;
 
         private LineRenderer lineRenderer;
-        private bool isSubscribed;
+        private bool isSimulationSubscribed;
 
         private void Awake()
         {
@@ -22,31 +22,85 @@ namespace Simulation
                 terrainGenerator = GetComponent<TerrainGenerator>();
             }
 
+            if (impactSimulation == null)
+            {
+                impactSimulation = FindFirstObjectByType<ImpactSimulation>();
+            }
+
+            if (target == null)
+            {
+                target = FindFirstObjectByType<Target>(FindObjectsInactive.Include);
+            }
+
             SetupLineRenderer();
         }
 
         private void OnEnable()
         {
-            TrySubscribe();
+            TrySubscribeSimulation();
         }
 
         private void Start()
         {
-            TrySubscribe();
+            TrySubscribeSimulation();
         }
 
         private void Update()
         {
-            TrySubscribe();
+            TrySubscribeSimulation();
             UpdateRadiusIndicator();
         }
 
         private void OnDisable()
         {
-            if (isSubscribed && Mouse3D.Instance != null)
+            if (isSimulationSubscribed && impactSimulation != null)
             {
-                Mouse3D.Instance.OnLeftMouseClicked -= HandleLeftMouseClicked;
-                isSubscribed = false;
+                impactSimulation.ResultsComputed -= HandleResultsComputed;
+                isSimulationSubscribed = false;
+            }
+        }
+
+        private void TrySubscribeSimulation()
+        {
+            if (!isSimulationSubscribed && impactSimulation != null)
+            {
+                impactSimulation.ResultsComputed += HandleResultsComputed;
+                isSimulationSubscribed = true;
+            }
+        }
+
+        private void HandleResultsComputed(ImpactResults results)
+        {
+            DeformAtTarget((float)results.CraterRimRadiusM, (float)results.finalDepthM);
+        }
+
+        public void DeformAtTarget()
+        {
+            float craterRadius = impactSimulation != null ? (float)impactSimulation.Results.CraterRimRadiusM : 0f;
+            float craterDepth = impactSimulation != null ? (float)impactSimulation.Results.finalDepthM : 0f;
+            DeformAtTarget(craterRadius, craterDepth);
+        }
+
+        public void DeformAtTarget(float craterRadius, float craterDepth)
+        {
+            if (target == null)
+            {
+                target = FindFirstObjectByType<Target>(FindObjectsInactive.Include);
+            }
+
+            if (target != null)
+            {
+                if (!target.gameObject.activeInHierarchy)
+                {
+                    return;
+                }
+                DeformTerrain(target.transform.position, craterRadius, craterDepth);
+                return;
+            }
+
+            if (Mouse3D.Instance != null)
+            {
+                DeformTerrain(Mouse3D.Instance.MousePosition, craterRadius, craterDepth);
             }
         }
 
@@ -96,33 +150,20 @@ namespace Simulation
             lineRenderer.startColor = radiusColor;
             lineRenderer.endColor = radiusColor;
 
+            float currentRadius = impactSimulation != null ? (float)impactSimulation.Results.CraterRimRadiusM : 0f;
             Vector3 center = Mouse3D.Instance != null ? Mouse3D.Instance.MousePosition : transform.position;
             float angleStep = 2f * Mathf.PI / segments;
 
             for (int i = 0; i < segments; i++)
             {
                 float angle = i * angleStep;
-                float x = center.x + Mathf.Cos(angle) * radius;
-                float z = center.z + Mathf.Sin(angle) * radius;
+                float x = center.x + Mathf.Cos(angle) * currentRadius;
+                float z = center.z + Mathf.Sin(angle) * currentRadius;
                 lineRenderer.SetPosition(i, new Vector3(x, center.y + 0.05f, z));
             }
         }
 
-        private void TrySubscribe()
-        {
-            if (!isSubscribed && Mouse3D.Instance != null)
-            {
-                Mouse3D.Instance.OnLeftMouseClicked += HandleLeftMouseClicked;
-                isSubscribed = true;
-            }
-        }
-
-        private void HandleLeftMouseClicked(Vector3 mouseWorldPosition)
-        {
-            DeformTerrain(mouseWorldPosition);
-        }
-
-        public void DeformTerrain(Vector3 worldPosition)
+        public void DeformTerrain(Vector3 worldPosition, float craterRadius, float craterDepth)
         {
             if (terrainGenerator == null)
             {
@@ -147,7 +188,7 @@ namespace Simulation
             Transform terrainTransform = terrainGenerator.transform;
             Vector3 localCenter = terrainTransform.InverseTransformPoint(worldPosition);
             Vector2 centerXZ = new Vector2(localCenter.x, localCenter.z);
-            float radiusSq = radius * radius;
+            float radiusSq = craterRadius * craterRadius;
 
             Vector3[] vertices = mesh.vertices;
             bool modified = false;
@@ -157,7 +198,7 @@ namespace Simulation
                 Vector2 vertexXZ = new Vector2(vertices[i].x, vertices[i].z);
                 if ((vertexXZ - centerXZ).sqrMagnitude <= radiusSq)
                 {
-                    vertices[i].y -= depth;
+                    vertices[i].y -= craterDepth;
                     modified = true;
                 }
             }
